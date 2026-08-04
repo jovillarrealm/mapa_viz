@@ -121,6 +121,7 @@ def process_single_dataset(
         lat_col=getattr(args, "lat_col", None),
         lon_col=getattr(args, "lon_col", None),
         group_col=getattr(args, "group_col", None),
+        crs=getattr(args, "crs", "EPSG:4326"),
     )
 
     match ingest_result:
@@ -349,6 +350,11 @@ def main():
         "--group-col",
         default=None,
         help="Column for grouping markers (e.g., Sector, Species, Code)",
+    )
+    parser.add_argument(
+        "--crs",
+        default="EPSG:4326",
+        help="Coordinate Reference System / Projection (e.g. EPSG:4326, EPSG:3116, EPSG:9377, EPSG:32618, 'UTM 18N', 'MAGNA-SIRGAS')",
     )
     parser.add_argument(
         "-o",

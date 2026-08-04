@@ -6,6 +6,7 @@ from shapely.geometry import Point
 
 from core.adapters.base import BaseDataAdapter
 from core.adapters.excel_adapter import ExcelDataAdapter
+from core.coordinates import prepare_spatial_dataframe
 from core.domain import DataSource, SpatialDataset
 from core.errors import SpatialError, SpatialErrorCode
 from core.result import Err, Ok, Result
@@ -69,33 +70,30 @@ class CSVDataAdapter(BaseDataAdapter):
             resolved_lat, resolved_lon = detected_cols
             resolved_group = excel_helper._detect_group_column(df, group_col)
 
-            df[resolved_lat] = pd.to_numeric(df[resolved_lat], errors="coerce")
-            df[resolved_lon] = pd.to_numeric(df[resolved_lon], errors="coerce")
-            valid_df = df.dropna(subset=[resolved_lat, resolved_lon]).copy()
-
-            if len(valid_df) == 0:
-                return Err(
-                    SpatialError(
-                        code=SpatialErrorCode.EmptyDataset,
-                        message="No valid coordinate rows remaining after parsing CSV",
-                        source_path=str(source),
+            prep_result = prepare_spatial_dataframe(
+                df, lat_col=resolved_lat, lon_col=resolved_lon, source_crs=crs
+            )
+            match prep_result:
+                case Err(err):
+                    return Err(
+                        SpatialError(
+                            code=err.code,
+                            message=err.message,
+                            source_path=source_path,
+                            details=err.details,
+                        )
                     )
-                )
+                case Ok((gdf, effective_crs)):
+                    pass
 
-            geometry = [
-                Point(xy)
-                for xy in zip(
-                    valid_df[resolved_lon], valid_df[resolved_lat], strict=False
-                )
-            ]
-            gdf = gpd.GeoDataFrame(valid_df, geometry=geometry, crs=crs)
             dataset_name = self.derive_dataset_name(source)
 
             metadata = {
                 "delimiter": sep,
                 "raw_total_rows": len(df),
-                "valid_rows": len(valid_df),
+                "valid_rows": len(gdf),
                 "columns": [str(column) for column in df.columns],
+                "crs": effective_crs,
             }
 
             dataset = SpatialDataset(
