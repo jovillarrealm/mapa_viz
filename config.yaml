@@ -1,0 +1,41 @@
+# Configuración del Sistema de Generación Cartográfica Automatizada (geo_map_generator)
+
+ingestion:
+  lat_candidates: ["lat", "latitude", "latitud", "x", "y_coord", "lat_dd"]
+  lon_candidates: ["lon", "long", "longitude", "longitud", "y", "x_coord", "lon_dd"]
+  default_crs: "EPSG:4326"
+
+elevation:
+  padding_deg: 0.35
+  resolution_arcsec: 3
+  azimuth_deg: 315.0
+  altitude_deg: 45.0
+  # Low-opacity physical hillshade preserves the vivid elevation colors.
+  hillshade_alpha: 0.16
+  hypsometric_cmap: "publication_illustrative"
+
+cartography:
+  output_dpi: 300
+  fig_size: [11.5, 8.5]  # Ancho x Alto en pulgadas (formato carta horizontal)
+  font_family: "sans-serif"
+  grid_line_style: "--"
+  grid_alpha: 0.35
+  marker_size: 75
+  show_inset: true
+  inset_position: "top_left"  # Submap location: top_left (default), top_right, bottom_left, bottom_right, auto, outside
+  show_compass: true
+  compass_location: [0.88, 0.18]  # Rosa de los vientos
+  show_scale_bar: true
+  scale_bar_location: [0.74, 0.05]  # Barra de escala métrica
+  show_point_labels: true
+  show_legend: false  # Oculto por defecto (se activa via --show-legend)
+  show_elevation_colorbar: false  # Oculto por defecto
+  markers: ["o", "s", "^", "D", "v", "p", "P", "*", "h", "H", "X", "d", "<", ">"]
+  # Vivid, color-vision-deficiency friendly publication marker palette.
+  colors: ["#0067B1", "#E64B35", "#00A676", "#D64D9B", "#F4A300", "#7656A6", "#9A9B00", "#53636D"]
+  rivers_scale: "10m"
+  lakes_scale: "10m"
+
+web_map:
+  default_zoom: 9
+  tiles: "OpenStreetMap"
