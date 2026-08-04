@@ -174,17 +174,17 @@ def build_render_spec(
             style=resolved,
             base_layer=BaseLayer.HYPSOMETRIC,
             basemap_alpha=0.85,
-            hillshade_alpha=configured_alpha if configured_alpha is not None else 0.22,
-            hydrography=HydrographySpec("10m", 9, 12, 1.65, 2.8, 0.82),
+            hillshade_alpha=configured_alpha if configured_alpha is not None else 0.18,
+            hydrography=HydrographySpec("10m", 9, 14, 1.85, 3.0, 0.88),
             palette=PUBLICATION_PALETTE,
         )
     if resolved is MapStyle.HYBRID_RELIEF:
         return MapRenderSpec(
             style=resolved,
             base_layer=BaseLayer.HYPSOMETRIC,
-            basemap_alpha=0.65,
-            hillshade_alpha=configured_alpha if configured_alpha is not None else 0.18,
-            hydrography=HydrographySpec("10m", 9, 10, 1.15, 2.1, 0.72),
+            basemap_alpha=0.40,
+            hillshade_alpha=configured_alpha if configured_alpha is not None else 0.35,
+            hydrography=HydrographySpec("10m", 8, 8, 1.0, 1.8, 0.60),
             palette=PUBLICATION_PALETTE,
         )
     return MapRenderSpec(
