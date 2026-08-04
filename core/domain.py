@@ -26,7 +26,6 @@ class MapStyle(Enum):
 
     TOPO = "topo"
     HYBRID_AQUATIC = "hybrid_aquatic"
-    HYBRID_RELIEF = "hybrid_relief"
     BASEMAP = "basemap"
 
 

@@ -21,6 +21,10 @@ from core.cli import interactive_cli_menu, print_summary_table
 from core.config import AppConfig, parse_config
 from core.dem_handler import get_dem_and_hillshade
 from core.domain import ExportFormat, MapStyle, ProcessingSummary
+from core.output_manager import (
+    prepare_dataset_output_directory,
+    remove_legacy_root_artifacts,
+)
 from core.result import Err, Ok
 from core.web_exporter import export_web_map
 from generate_sample_data import create_sample_excel
@@ -57,7 +61,6 @@ def process_single_dataset(
         active_styles = [
             MapStyle.TOPO,
             MapStyle.HYBRID_AQUATIC,
-            MapStyle.HYBRID_RELIEF,
             MapStyle.BASEMAP,
         ]
     else:
@@ -65,14 +68,14 @@ def process_single_dataset(
         for s in raw_styles:
             s_lower = str(s).lower()
             match s_lower:
-                case "hybrid_aquatic" | "hybrid1" | "dem_plus_basemap":
+                case "publicacion" | "publication" | "hybrid" | "hybrid_aquatic" | "hybrid1" | "dem_plus_basemap":
                     active_styles.append(MapStyle.HYBRID_AQUATIC)
-                case "hybrid_relief" | "hybrid2" | "basemap_plus_hillshade":
-                    active_styles.append(MapStyle.HYBRID_RELIEF)
+                case "topological" | "topologico" | "topo" | "topographic":
+                    active_styles.append(MapStyle.TOPO)
                 case "basemap" | "clean_png" | "clean_basemap":
                     active_styles.append(MapStyle.BASEMAP)
-                case "topo" | "topographic" | "publication" | "publicacion" | _:
-                    active_styles.append(MapStyle.TOPO)
+                case _:
+                    active_styles.append(MapStyle.HYBRID_AQUATIC)
 
     # Resolve ExportFormats
     if "all" in raw_formats:
@@ -101,11 +104,6 @@ def process_single_dataset(
                 case "hybrid1":
                     if MapStyle.HYBRID_AQUATIC not in active_styles:
                         active_styles.append(MapStyle.HYBRID_AQUATIC)
-                    if ExportFormat.PNG not in active_formats:
-                        active_formats.append(ExportFormat.PNG)
-                case "hybrid2":
-                    if MapStyle.HYBRID_RELIEF not in active_styles:
-                        active_styles.append(MapStyle.HYBRID_RELIEF)
                     if ExportFormat.PNG not in active_formats:
                         active_formats.append(ExportFormat.PNG)
                 case "clean_png":
@@ -160,7 +158,10 @@ def process_single_dataset(
     else:
         dataset_output_dir = os.path.join(args.output_dir, dataset_name)
 
-    os.makedirs(dataset_output_dir, exist_ok=True)
+    prepare_dataset_output_directory(
+        dataset_output_dir,
+        replace_existing=not getattr(args, "unique_dirs", False),
+    )
     print(
         f"    [Output Directory] Isolated artifacts saved to: {os.path.abspath(dataset_output_dir)}"
     )
@@ -203,20 +204,6 @@ def process_single_dataset(
             inset_position=override_inset_pos,
         )
         rendered_files.extend(outputs)
-
-    # Sync primary mapa_publicacion outputs to root output/ for root level access
-    import shutil
-    base_out = getattr(args, "output_dir", "output")
-    if os.path.abspath(dataset_output_dir) != os.path.abspath(base_out):
-        for f in rendered_files:
-            bname = os.path.basename(f)
-            if bname.startswith("mapa_publicacion"):
-                dst = os.path.join(base_out, bname)
-                try:
-                    shutil.copy2(f, dst)
-                    print(f"    [Sync] Primary publication artifact updated -> {dst}")
-                except Exception:
-                    pass
 
     # 4. Interactive Web Map HTML (Standalone HTML output)
     if include_web_map:
@@ -272,14 +259,14 @@ def main():
         "--styles",
         nargs="+",
         default=["all"],
-        help="Specify cartographic map styles: publicacion/topo hybrid_aquatic hybrid_relief basemap all",
+        help="Specify cartographic map styles: publicacion (hybrid), topological, basemap, all",
     )
     parser.add_argument(
         "-f",
         "--formats",
         nargs="+",
-        default=["all"],
-        help="Specify export container formats: pdf png tif jxl all",
+        default=["png", "pdf", "jxl"],
+        help="Specify export container formats: png pdf tif jxl all (default: png pdf jxl)",
     )
     parser.add_argument(
         "--no-web",
@@ -465,6 +452,13 @@ def main():
     print("      GEO MAP GENERATOR - PIPELINE AUTOMATIZADO DE CARTOGRAFÍA          ")
     print(f"      Data Adapters Loaded | Target Datasets: {len(target_files)}")
     print("=========================================================================")
+
+    removed_legacy_artifacts = remove_legacy_root_artifacts(args.output_dir)
+    if removed_legacy_artifacts:
+        print(
+            "      Removed legacy root-level artifacts: "
+            f"{len(removed_legacy_artifacts)}"
+        )
 
     summary_results: list[ProcessingSummary] = []
     for file_path in target_files:

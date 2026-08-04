@@ -57,7 +57,7 @@ def get_available_input_files(search_dir: str = "inputs") -> list[tuple[str, str
 def interactive_cli_menu() -> InteractiveCliOptions:
     """
     Renders rich interactive terminal menu allowing users to independently select:
-    - Map Styles (Eje 1: topo, hybrid_aquatic, hybrid_relief, basemap)
+    - Map Styles (Eje 1: topo, hybrid_aquatic, basemap)
     - Export Formats (Eje 2: pdf, png, tif, jxl)
     """
     display_welcome_banner()
@@ -110,13 +110,8 @@ def interactive_cli_menu() -> InteractiveCliOptions:
             checked=True,
         ),
         questionary.Choice(
-            title="hybrid_aquatic - Híbrido 1 (DEM Topográfico + Capa Acuática Basemap)",
+            title="hybrid_aquatic - Híbrido / Publicación (DEM Topográfico + Capa Acuática Basemap)",
             value="hybrid_aquatic",
-            checked=True,
-        ),
-        questionary.Choice(
-            title="hybrid_relief  - Híbrido 2 (Basemap Limpio + Textura Topográfica 3D)",
-            value="hybrid_relief",
             checked=True,
         ),
         questionary.Choice(

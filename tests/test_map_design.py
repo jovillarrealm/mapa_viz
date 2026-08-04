@@ -13,17 +13,15 @@ from core.map_design import (
 
 
 def test_publication_and_hybrid_layer_specs_are_explicit():
+    topological = build_render_spec("topological")
     publication = build_render_spec("publicacion")
-    aquatic = build_render_spec(MapStyle.HYBRID_AQUATIC)
-    relief = build_render_spec(MapStyle.HYBRID_RELIEF)
 
-    assert publication.style is MapStyle.TOPO
+    assert topological.style is MapStyle.TOPO
+    assert publication.style is MapStyle.HYBRID_AQUATIC
+    assert topological.base_layer is BaseLayer.HYPSOMETRIC
     assert publication.base_layer is BaseLayer.HYPSOMETRIC
-    assert aquatic.base_layer is BaseLayer.HYPSOMETRIC
-    assert aquatic.hydrography.river_width > publication.hydrography.river_width
-    assert relief.base_layer is BaseLayer.HYPSOMETRIC
-    assert aquatic.basemap_alpha > relief.basemap_alpha > 0
-    assert relief.hillshade_alpha < aquatic.hillshade_alpha
+    assert publication.hydrography.river_width > topological.hydrography.river_width
+    assert publication.basemap_alpha > 0
 
 
 def test_group_symbols_are_stable_and_use_publication_palette():

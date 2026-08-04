@@ -131,13 +131,15 @@ def resolve_map_style(style: MapStyle | str) -> MapStyle:
 
     normalized = str(style).strip().lower()
     aliases = {
+        "topological": MapStyle.TOPO,
+        "topologico": MapStyle.TOPO,
         "topographic": MapStyle.TOPO,
-        "publication": MapStyle.TOPO,
-        "publicacion": MapStyle.TOPO,
+        "topo": MapStyle.TOPO,
+        "publicacion": MapStyle.HYBRID_AQUATIC,
+        "publication": MapStyle.HYBRID_AQUATIC,
+        "hybrid": MapStyle.HYBRID_AQUATIC,
         "hybrid1": MapStyle.HYBRID_AQUATIC,
         "dem_plus_basemap": MapStyle.HYBRID_AQUATIC,
-        "hybrid2": MapStyle.HYBRID_RELIEF,
-        "basemap_plus_hillshade": MapStyle.HYBRID_RELIEF,
         "clean_png": MapStyle.BASEMAP,
         "clean_basemap": MapStyle.BASEMAP,
     }
@@ -176,15 +178,6 @@ def build_render_spec(
             basemap_alpha=0.85,
             hillshade_alpha=configured_alpha if configured_alpha is not None else 0.22,
             hydrography=HydrographySpec("10m", 9, 12, 1.65, 2.8, 0.82),
-            palette=PUBLICATION_PALETTE,
-        )
-    if resolved is MapStyle.HYBRID_RELIEF:
-        return MapRenderSpec(
-            style=resolved,
-            base_layer=BaseLayer.HYPSOMETRIC,
-            basemap_alpha=0.65,
-            hillshade_alpha=configured_alpha if configured_alpha is not None else 0.18,
-            hydrography=HydrographySpec("10m", 9, 10, 1.15, 2.1, 0.72),
             palette=PUBLICATION_PALETTE,
         )
     return MapRenderSpec(

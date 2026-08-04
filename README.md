@@ -55,7 +55,7 @@ uv run main.py
 
 Map visual styles (**Axis 1**) and export container formats (**Axis 2**) are completely decoupled:
 
-- **Axis 1: Map Styles (`-s, --styles`)**: `topo`, `hybrid_aquatic`, `hybrid_relief`, `basemap`, `all`
+- **Axis 1: Map Styles (`-s, --styles`)**: `topo`, `hybrid_aquatic`, `basemap`, `all`
 - **Axis 2: Export Formats (`-f, --formats`)**: `pdf`, `png`, `tif`, `jxl`, `all`
 - **Interactive Web Map**: Handled independently via `--no-web` or interactive prompt.
 
@@ -63,9 +63,8 @@ Static styles share one ordered publication stack:
 
 | Style | Base | Relief | Hydrography |
 | :--- | :--- | :--- | :--- |
-| `topo` / `publicacion` | Vivid illustrative hypsometric DEM | Physically scaled AWS DEM hillshade | High-contrast Natural Earth lakes and selected rivers |
-| `hybrid_aquatic` | Vivid DEM + stronger translucent CartoDB context | Physically scaled AWS DEM hillshade | Saturated-blue basemap water/drainage plus emphasized Natural Earth lakes and rivers |
-| `hybrid_relief` | Vivid DEM + lighter translucent CartoDB context | Physically scaled AWS DEM hillshade | Saturated-blue basemap water/drainage plus restrained Natural Earth lakes and rivers |
+| `topo` | Vivid illustrative hypsometric DEM | Physically scaled AWS DEM hillshade | High-contrast Natural Earth lakes and selected rivers |
+| `hybrid_aquatic` / `publicacion` | Vivid DEM + translucent CartoDB context | Physically scaled AWS DEM hillshade | Saturated-blue basemap water/drainage plus emphasized Natural Earth lakes and rivers |
 | `basemap` | CartoDB Light, no labels | None | Minimal Natural Earth hydrography |
 
 AWS Web Mercator tiles are reprojected and cropped to the exact WGS84 map extent before rendering. This is what keeps relief, Natural Earth vectors, rivers, and markers spatially aligned.
@@ -91,8 +90,8 @@ uv run main.py -i inputs --hide-labels --hide-colorbar
 | Option | Flag | Description | Default |
 | :--- | :--- | :--- | :--- |
 | **Input Source** | `-i, --input` | Input file or directory path (omit for Interactive Menu) | `inputs/` |
-| **Map Styles** | `-s, --styles` | Space-separated map styles (`topo`, `hybrid_aquatic`, `hybrid_relief`, `basemap`, `all`) | `all` |
-| **Export Formats** | `-f, --formats` | Space-separated export formats (`pdf`, `png`, `tif`, `jxl`, `all`) | `all` |
+| **Map Styles** | `-s, --styles` | Space-separated map styles (`topo`, `hybrid_aquatic`, `basemap`, `all`) | `all` |
+| **Export Formats** | `-f, --formats` | Space-separated export formats (`pdf`, `png`, `tif`, `jxl`, `all`) | `png pdf jxl` |
 | **Disable Web Map**| `--no-web` | Skip GPU interactive HTML web map generation | `false` |
 | **Legend Toggle** | `--show-legend` / `--hide-legend` | Explicitly show or hide sampling points legend | `config.yaml` (`false`) |
 | **Point Labels** | `--show-labels` / `--hide-labels` | Explicitly show or hide text labels over sampling points | `config.yaml` (`true`) |
@@ -101,6 +100,10 @@ uv run main.py -i inputs --hide-labels --hide-colorbar
 | **DPI Target** | `--dpi` | Target output resolution in DPI (e.g., 300, 600, 1200) | `300` |
 | **Output Base** | `-o, --output-dir` | Destination base folder for generated maps | `output/` |
 | **Isolated Dirs** | `--unique-dirs` | Append execution timestamp to dataset output directory | `false` |
+
+Without `--unique-dirs`, rerunning a dataset replaces its previous dataset output
+directory before rendering. Use `--unique-dirs` when retaining run history is
+intentional. The `output/` root contains dataset directories only.
 
 ---
 
