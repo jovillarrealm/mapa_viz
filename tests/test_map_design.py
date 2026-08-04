@@ -23,7 +23,7 @@ def test_publication_and_hybrid_layer_specs_are_explicit():
     assert aquatic.hydrography.river_width > publication.hydrography.river_width
     assert relief.base_layer is BaseLayer.HYPSOMETRIC
     assert aquatic.basemap_alpha > relief.basemap_alpha > 0
-    assert relief.hillshade_alpha > aquatic.hillshade_alpha
+    assert relief.hillshade_alpha < aquatic.hillshade_alpha
 
 
 def test_group_symbols_are_stable_and_use_publication_palette():
