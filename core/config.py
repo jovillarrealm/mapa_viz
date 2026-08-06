@@ -37,7 +37,7 @@ class CartographyConfig(TypedDict, total=False):
     show_scale_bar: bool
     scale_bar_location: tuple[float, float]
     show_point_labels: bool
-    show_legend: bool
+    with_legend: str | bool
     show_elevation_colorbar: bool
     markers: tuple[str, ...]
     colors: tuple[str, ...]
@@ -162,8 +162,10 @@ def parse_config(raw: object) -> AppConfig:
         cartography["show_scale_bar"] = value
     if (value := _boolean(cartography_raw.get("show_point_labels"))) is not None:
         cartography["show_point_labels"] = value
-    if (value := _boolean(cartography_raw.get("show_legend"))) is not None:
-        cartography["show_legend"] = value
+    if (value := _string(cartography_raw.get("with_legend"))) is not None:
+        cartography["with_legend"] = value
+    elif (value := _boolean(cartography_raw.get("with_legend"))) is not None:
+        cartography["with_legend"] = value
     if (value := _boolean(cartography_raw.get("show_elevation_colorbar"))) is not None:
         cartography["show_elevation_colorbar"] = value
     inset_raw = cartography_raw.get("inset_position")

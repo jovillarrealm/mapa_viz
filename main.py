@@ -138,7 +138,7 @@ def process_single_dataset(
             group_col = dataset.group_col
 
     # Read CLI / interactive cartographic overrides
-    override_legend = getattr(args, "override_legend", None)
+    override_with_legend = getattr(args, "with_legend", None)
     override_labels = getattr(args, "override_labels", None)
     override_colorbar = getattr(args, "override_colorbar", None)
     override_inset = getattr(args, "override_inset", None)
@@ -177,7 +177,7 @@ def process_single_dataset(
     print("    [OK] DEM Elevation & 3D Hillshade matrix ready.")
 
     # 3. Static Publication Cartography & Decoupled Matrix Rendering
-    dpi = getattr(args, "dpi", 1200)
+    dpi = getattr(args, "dpi", 500)
     style_names = [s.value for s in active_styles]
     format_names = [f.value for f in active_formats]
     print(
@@ -197,7 +197,7 @@ def process_single_dataset(
             dpi=dpi,
             group_col=group_col,
             config=cfg,
-            show_legend=override_legend,
+            with_legend=override_with_legend,
             show_point_labels=override_labels,
             show_elevation_colorbar=override_colorbar,
             show_inset=override_inset,
@@ -234,151 +234,193 @@ def process_single_dataset(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated Cartographic Map Generator for Ichthyology (geo_map_generator)"
+        prog="geo_map_generator",
+        description="""
+========================================================================
+   GEO MAP GENERATOR - PIPELINE AUTOMATIZADO DE CARTOGRAFÍA
+   Generación automatizada de mapas topográficos, híbridos y basemaps
+========================================================================
+Generador cartográfico automatizado de alto rendimiento para Ictiología y Análisis Espacial.
+Soporta matriz de renderizado multi-formato (PDF, PNG, TIFF, JPEG XL, Mapa Web Interactivo HTML)
+con elevación DEM de AWS, sombreado 3D de relieve (hillshade), hidrografía Natural Earth y
+ubicación inteligente de leyendas, insets y escalas.
+""",
+        epilog="""
+EJEMPLOS DE USO / USAGE EXAMPLES:
+------------------------------------------------------------------------
+1. Procesar dataset de muestra por defecto (500 DPI):
+   $ python main.py -i inputs/SampleSites_Afa_planas.xlsx
+
+2. Procesar con leyenda por defecto (afuera en el panel derecho):
+   $ python main.py -i inputs/Coordenadas_Cordylancistrus.xlsx --with-legend
+
+3. Procesar con leyenda adentro del mapa (posición superior derecha):
+   $ python main.py -i inputs/Coordenadas_Cordylancistrus.xlsx --with-legend inside
+
+4. Especificar posición exacta de leyenda (afuera en esquina inferior derecha):
+   $ python main.py -i inputs/coordenadas_mapa_Hypostomus_Liseth.xlsx --with-legend bottom_right_outside
+
+5. Procesar todos los datasets en inputs/ con leyenda y exportar PDF + PNG:
+   $ python main.py -i inputs --with-legend -f pdf png -s hybrid_aquatic topo
+
+6. Iniciar menú interactivo Rich en la terminal:
+   $ python main.py --interactive
+------------------------------------------------------------------------
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
+
+    # 1. Input & Workflow Options
+    g_input = parser.add_argument_group("Input & Workflow Options / Opciones de Entrada")
+    g_input.add_argument(
         "-i",
         "--input",
         nargs="?",
         const="INTERACTIVE",
         default=None,
-        help="Input file/dir path, or omit to launch Interactive CLI Menu",
+        help="Ruta al archivo o directorio espacial de entrada (e.g. inputs/dataset.xlsx), o sin argumento para menú interactivo.",
     )
-    parser.add_argument(
+    g_input.add_argument(
         "--interactive",
         action="store_true",
-        help="Launch Rich Interactive Terminal Menu",
+        help="Iniciar el menú interactivo Rich en la terminal.",
     )
-    parser.add_argument(
+    g_input.add_argument(
         "--all-inputs",
         action="store_true",
-        help="Process all compatible spatial files found in the inputs directory",
+        help="Procesar todos los archivos espaciales compatibles en el directorio 'inputs/'.",
     )
-    parser.add_argument(
+
+    # 2. Styles & Export Formats
+    g_style = parser.add_argument_group("Map Styles & Export Formats / Estilos y Formatos")
+    g_style.add_argument(
         "-s",
         "--styles",
         nargs="+",
         default=["all"],
-        help="Specify cartographic map styles: publicacion (hybrid), topological, basemap, all",
+        help="Estilos de mapa a renderizar: 'publicacion' / 'hybrid_aquatic' (híbrido acuático), 'topo' (topográfico hipsométrico), 'basemap' (CartoDB limpio), o 'all' (por defecto: all).",
     )
-    parser.add_argument(
+    g_style.add_argument(
         "-f",
         "--formats",
         nargs="+",
         default=["png", "pdf", "jxl"],
-        help="Specify export container formats: png pdf tif jxl all (default: png pdf jxl)",
+        help="Formatos de exportación: 'png', 'pdf', 'tif' / 'tiff', 'jxl' (JPEG XL), o 'all' (por defecto: png pdf jxl).",
     )
-    parser.add_argument(
+    g_style.add_argument(
+        "--dpi",
+        type=int,
+        default=500,
+        help="Resolución DPI para exportación estática de mapas de publicación (por defecto: 500 DPI).",
+    )
+    g_style.add_argument(
         "--no-web",
         action="store_true",
-        help="Disable interactive HTML web map generation",
+        help="Desactivar la generación del mapa web interactivo GPU en HTML.",
     )
 
-    # Cartographic CLI flags
-    parser.add_argument(
-        "--show-legend",
-        action="store_true",
-        help="Display sampling points / sectors legend box",
+    # 3. Legend & Point Labels
+    g_legend = parser.add_argument_group("Legend & Point Labels / Leyendas y Etiquetas")
+    g_legend.add_argument(
+        "--with-legend",
+        nargs="?",
+        const="top_right_outside",
+        default=None,
+        help="Activar leyenda y especificar su ubicación/posicionamiento. Afuera: 'top_right_outside' (por defecto), 'top_left_outside', 'bottom_right_outside', 'bottom_left_outside', 'bottom_outside'. Adentro: 'inside' / 'top_right_inside', 'top_left_inside', 'bottom_right_inside', 'bottom_left_inside', 'bottom_center_inside'.",
     )
-    parser.add_argument(
-        "--hide-legend",
-        action="store_true",
-        help="Hide sampling points / sectors legend box",
-    )
-    parser.add_argument(
+    g_legend.add_argument(
         "--show-labels",
         action="store_true",
-        help="Display text labels over sampling points",
+        help="Forzar la visualización de etiquetas de texto sobre los puntos de muestreo.",
     )
-    parser.add_argument(
+    g_legend.add_argument(
         "--hide-labels",
         action="store_true",
-        help="Hide text labels over sampling points",
+        help="Forzar el ocultamiento de etiquetas de texto sobre los puntos de muestreo.",
     )
-    parser.add_argument(
-        "--show-colorbar",
-        action="store_true",
-        help="Display elevation colorbar (m.s.n.m.)",
-    )
-    parser.add_argument(
-        "--hide-colorbar",
-        action="store_true",
-        help="Hide elevation colorbar",
-    )
-    parser.add_argument(
+
+    # 4. Map Layout Elements
+    g_layout = parser.add_argument_group("Map Layout Elements / Inset y Barra de Colores")
+    g_layout.add_argument(
         "--show-inset",
         action="store_true",
-        help="Display Colombia submap inset",
+        help="Mostrar el submapa continental de Colombia (inset).",
     )
-    parser.add_argument(
+    g_layout.add_argument(
         "--hide-inset",
         action="store_true",
-        help="Hide Colombia submap inset",
+        help="Ocultar el submapa continental de Colombia.",
     )
-    parser.add_argument(
+    g_layout.add_argument(
         "--inset-position",
         default=None,
         choices=["top_left", "top_right", "bottom_left", "bottom_right", "auto", "outside", "outside_right", "outside_left"],
-        help="Specify submap inset location: top_left (default), top_right, bottom_left, bottom_right, auto, outside",
+        help="Ubicación del submapa inset: 'top_left' (por defecto), 'top_right', 'bottom_left', 'bottom_right', 'auto', 'outside'.",
+    )
+    g_layout.add_argument(
+        "--show-colorbar",
+        action="store_true",
+        help="Mostrar la barra de colores de elevación (m.s.n.m.).",
+    )
+    g_layout.add_argument(
+        "--hide-colorbar",
+        action="store_true",
+        help="Ocultar la barra de colores de elevación.",
     )
 
-    parser.add_argument(
+    # 5. Spatial Data Ingestion & CRS
+    g_geo = parser.add_argument_group("Spatial Data Ingestion & CRS / Ingesta y Coordenadas")
+    g_geo.add_argument(
         "--lat-col",
         default=None,
-        help="Name of Latitude column (optional, auto-detected)",
+        help="Nombre explícito de la columna de Latitud (opcional, auto-detectado).",
     )
-    parser.add_argument(
+    g_geo.add_argument(
         "--lon-col",
         default=None,
-        help="Name of Longitude column (optional, auto-detected)",
+        help="Nombre explícito de la columna de Longitud (opcional, auto-detectado).",
     )
-    parser.add_argument(
+    g_geo.add_argument(
         "-g",
         "--group-col",
         default=None,
-        help="Column for grouping markers (e.g., Sector, Species, Code)",
+        help="Columna para agrupar marcadores/colores (e.g. Sector, Especie, Codigo, Sitio).",
     )
-    parser.add_argument(
+    g_geo.add_argument(
         "--crs",
         default="EPSG:4326",
-        help="Coordinate Reference System / Projection (e.g. EPSG:4326, EPSG:3116, EPSG:9377, EPSG:32618, 'UTM 18N', 'MAGNA-SIRGAS')",
+        help="Sistema de Referencia Espacial / Proyección (e.g. EPSG:4326, EPSG:3116, MAGNA-SIRGAS) (por defecto: EPSG:4326).",
     )
-    parser.add_argument(
-        "-o",
-        "--output-dir",
-        default="output",
-        help="Base destination directory for generated map outputs",
-    )
-    parser.add_argument(
-        "--unique-dirs",
-        action="store_true",
-        help="Append timestamp to output directories to create a new folder for every run",
-    )
-    parser.add_argument(
-        "--dpi",
-        type=int,
-        default=300,
-        help="DPI resolution for static publication maps (default: 300)",
-    )
-    parser.add_argument(
+    g_geo.add_argument(
         "--padding",
         type=float,
         default=0.35,
-        help="Padding around bounding box in degrees (default: 0.35)",
+        help="Margen/Padding alrededor del bounding box en grados (por defecto: 0.35).",
     )
-    parser.add_argument(
+
+    # 6. Output & Configuration
+    g_out = parser.add_argument_group("Output & Configuration / Salida y Configuración")
+    g_out.add_argument(
+        "-o",
+        "--output-dir",
+        default="output",
+        help="Directorio base para guardar los artefactos generados (por defecto: output).",
+    )
+    g_out.add_argument(
+        "--unique-dirs",
+        action="store_true",
+        help="Adjuntar timestamp al directorio de salida para crear una nueva carpeta por cada ejecución.",
+    )
+    g_out.add_argument(
         "-c",
         "--config",
         default="config.yaml",
-        help="Path to YAML configuration file",
+        help="Ruta al archivo YAML de configuración del sistema (por defecto: config.yaml).",
     )
 
     args = parser.parse_args()
 
     # Determine cartographic overrides from flags
-    args.override_legend = (
-        True if args.show_legend else (False if args.hide_legend else None)
-    )
     args.override_labels = (
         True if args.show_labels else (False if args.hide_labels else None)
     )
@@ -407,7 +449,7 @@ def main():
             selected_formats = cli_opts["selected_formats"]
             include_web_map = cli_opts.get("include_web_map", True)
             args.dpi = cli_opts["dpi"]
-            args.override_legend = cli_opts["override_legend"]
+            args.with_legend = cli_opts["override_with_legend"]
             args.override_labels = cli_opts["override_labels"]
             args.override_colorbar = cli_opts["override_colorbar"]
         except Exception as e:

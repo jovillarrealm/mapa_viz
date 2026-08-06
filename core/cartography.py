@@ -102,43 +102,92 @@ def get_hypsometric_colormap(
     )
 
 
+def parse_with_legend_spec(
+    with_legend: str | bool | None = None,
+    default_spec: str = "top_right_outside",
+) -> tuple[bool, str, str, tuple[float, float] | None, int]:
+    """
+    Parses legend specifications into:
+    (is_active, side_panel_mode, legend_loc, bbox_to_anchor, legend_ncols)
+
+    side_panel_mode: "right", "left", "bottom", or "none"
+    """
+    if with_legend is None or with_legend is False:
+        return False, "none", "upper right", None, 1
+    if with_legend is True:
+        raw_spec = default_spec
+    else:
+        raw_spec = str(with_legend).strip().lower()
+
+    if raw_spec in ["none", "false", "no", "off", "disable", "disabled"]:
+        return False, "none", "upper right", None, 1
+
+    # OUTSIDE variations
+    if raw_spec in ["top_right_outside", "right_outside", "outside_right", "outside"]:
+        return True, "right", "upper left", (1.04, 1.0), 1
+    elif raw_spec in ["bottom_right_outside"]:
+        return True, "right", "lower left", (1.04, 0.0), 1
+    elif raw_spec in ["top_left_outside", "left_outside", "outside_left"]:
+        return True, "left", "upper right", (-0.04, 1.0), 1
+    elif raw_spec in ["bottom_left_outside"]:
+        return True, "left", "lower right", (-0.04, 0.0), 1
+    elif raw_spec in ["bottom_outside", "bottom_center_outside", "bottom", "outside_bottom"]:
+        return True, "bottom", "upper center", (0.5, -0.12), 4
+
+    # INSIDE variations
+    elif raw_spec in ["top_right_inside", "top_right", "inside_top_right", "inside"]:
+        return True, "none", "upper right", None, 1
+    elif raw_spec in ["top_left_inside", "top_left", "inside_top_left"]:
+        return True, "none", "upper left", None, 1
+    elif raw_spec in ["bottom_right_inside", "bottom_right", "inside_bottom_right"]:
+        return True, "none", "lower right", None, 1
+    elif raw_spec in ["bottom_left_inside", "bottom_left", "inside_bottom_left"]:
+        return True, "none", "lower left", None, 1
+    elif raw_spec in ["bottom_center_inside", "bottom_inside", "inside_bottom"]:
+        return True, "none", "lower center", None, 1
+    elif raw_spec in ["auto", "best"]:
+        return True, "none", "best", None, 1
+    else:
+        return True, "right", "upper left", (1.04, 1.0), 1
+
+
 def resolve_inset_location(
     position: str | list[float] | tuple[float, ...] | None,
     gdf: gpd.GeoDataFrame,
     extent: tuple[float, float, float, float] | list[float],
-    has_legend_or_cbar: bool = False,
+    has_legend_or_cbar: bool | str = False,
 ) -> tuple[list[float], str, tuple[float, float, float, float]]:
     """
     Resolves the inset submap bounding box [x, y, w, h] and the main map axes rectangle.
-
-    Submap Position Options:
-    - 'top_left' (DEFAULT): inside main map, top-left corner
-    - 'top_right': inside main map, top-right corner
-    - 'bottom_left': inside main map, bottom-left corner
-    - 'bottom_right': inside main map, bottom-right corner
-    - 'auto': automatically selects inside corner with minimum sampling point overlap
-    - 'outside' / 'outside_right': placed outside main map frame on the right side
-    - 'outside_left': placed outside main map frame on the left side
     """
+    side_mode = (
+        str(has_legend_or_cbar).lower()
+        if isinstance(has_legend_or_cbar, str)
+        else ("right" if has_legend_or_cbar else "none")
+    )
+    if side_mode == "left":
+        default_map_rect = (0.28, 0.06, 0.64, 0.88)
+    elif side_mode == "bottom":
+        default_map_rect = (0.08, 0.22, 0.84, 0.72)
+    elif side_mode == "right":
+        default_map_rect = (0.08, 0.06, 0.66, 0.88)
+    else:
+        default_map_rect = (0.08, 0.06, 0.84, 0.88)
+
     if isinstance(position, (list, tuple)) and len(position) == 4:
-        map_rect = (0.08, 0.06, 0.66, 0.88) if has_legend_or_cbar else (0.08, 0.06, 0.84, 0.88)
-        return list(position), "custom", map_rect
+        return list(position), "custom", default_map_rect
 
     pos_str = str(position).lower() if position and isinstance(position, str) else "top_left"
 
     if pos_str in ["outside", "outside_right"]:
-        map_rect = (0.08, 0.06, 0.62, 0.88)
         inset_loc = [0.72, 0.54, 0.22, 0.34]
-        return inset_loc, "outside_right", map_rect
+        return inset_loc, "outside_right", (0.08, 0.06, 0.62, 0.88)
 
     if pos_str == "outside_left":
-        map_rect = (0.28, 0.06, 0.64, 0.88)
         inset_loc = [0.03, 0.54, 0.22, 0.34]
-        return inset_loc, "outside_left", map_rect
+        return inset_loc, "outside_left", (0.28, 0.06, 0.64, 0.88)
 
-    # Inside positions use main-axes fractions. This remains correct after
-    # Cartopy adjusts the main axes to the geographic aspect ratio.
-    map_rect = (0.08, 0.06, 0.66, 0.88) if has_legend_or_cbar else (0.08, 0.06, 0.84, 0.88)
+    map_rect = default_map_rect
 
     if pos_str == "top_right":
         return [0.71, 0.64, 0.27, 0.33], "top_right", map_rect
@@ -541,10 +590,10 @@ def render_publication_style(
     output_dir: str,
     map_style: MapStyle | str = MapStyle.TOPO,
     formats: list[ExportFormat] | None = None,
-    dpi: int = 300,
+    dpi: int = 500,
     group_col: str = "Sector",
     config: AppConfig | None = None,
-    show_legend: bool | None = None,
+    with_legend: str | bool | None = None,
     show_point_labels: bool | None = None,
     show_elevation_colorbar: bool | None = None,
     show_inset: bool | None = None,
@@ -572,16 +621,30 @@ def render_publication_style(
     fig_size = tuple(cart_cfg.get("fig_size", (11.5, 8.5)))
     effective_show_inset = True
     effective_show_labels = True
-    effective_show_legend = False
     effective_show_colorbar = False
     inset_position_setting: str | tuple[float, ...] | list[float] = "top_left"
     compass_loc: tuple[float, float] = (0.88, 0.18)
     scale_loc: tuple[float, float] = (0.74, 0.05)
 
+    active_with_legend = (
+        with_legend
+        if with_legend is not None
+        else cart_cfg.get("with_legend", None)
+    )
+
+    (
+        effective_show_legend,
+        side_panel_mode,
+        inside_legend_loc,
+        bbox_anchor,
+        leg_ncols,
+    ) = parse_with_legend_spec(
+        with_legend=active_with_legend,
+    )
+
     if config:
         effective_show_inset = cart_cfg.get("show_inset", effective_show_inset)
         effective_show_labels = cart_cfg.get("show_point_labels", effective_show_labels)
-        effective_show_legend = cart_cfg.get("show_legend", effective_show_legend)
         effective_show_colorbar = cart_cfg.get(
             "show_elevation_colorbar", effective_show_colorbar
         )
@@ -592,10 +655,11 @@ def render_publication_style(
         scale_loc = cart_cfg.get("scale_bar_location", scale_loc)
 
     # Explicit function / CLI overrides
-    if show_legend is not None:
-        effective_show_legend = show_legend
     if show_point_labels is not None:
         effective_show_labels = show_point_labels
+    elif effective_show_legend:
+        # Hide point text labels by default when legend is active to prevent visual clutter
+        effective_show_labels = False
     if show_elevation_colorbar is not None:
         effective_show_colorbar = show_elevation_colorbar
     if show_inset is not None:
@@ -603,6 +667,7 @@ def render_publication_style(
     if inset_position is not None:
         inset_position_setting = inset_position
 
+    show_inset = effective_show_inset
     show_inset = effective_show_inset
     show_point_labels = effective_show_labels
     show_legend = effective_show_legend
@@ -612,12 +677,14 @@ def render_publication_style(
 
     fig = plt.figure(figsize=fig_size, dpi=100)
 
-    has_legend_or_cbar = effective_show_legend or effective_show_colorbar
+    has_side_panel = side_panel_mode if effective_show_legend and side_panel_mode != "none" else (
+        "right" if effective_show_colorbar else "none"
+    )
     inset_loc, quad_name, map_axes_rect = resolve_inset_location(
         position=inset_position_setting if effective_show_inset else None,
         gdf=gdf,
         extent=extent,
-        has_legend_or_cbar=has_legend_or_cbar,
+        has_legend_or_cbar=has_side_panel,
     )
 
     ax = fig.add_axes(map_axes_rect, projection=ccrs.PlateCarree())
@@ -834,16 +901,23 @@ def render_publication_style(
         cbar.ax.tick_params(labelsize=8.5)
 
     if show_legend:
-        leg = ax.legend(
-            loc="upper right",
-            bbox_to_anchor=(1.35, 1.0),
-            frameon=True,
-            facecolor="white",
-            edgecolor="#111111",
-            fontsize=9,
-            title="Puntos de Muestreo",
-            title_fontsize=9.5,
+        legend_title = (
+            group_col if group_col and group_col != "Group" else "Puntos de Muestreo"
         )
+        leg_kwargs = {
+            "loc": inside_legend_loc,
+            "frameon": True,
+            "facecolor": "white",
+            "edgecolor": "#111111",
+            "fontsize": 9,
+            "title": legend_title,
+            "title_fontsize": 9.5,
+            "ncols": leg_ncols,
+        }
+        if bbox_anchor is not None:
+            leg_kwargs["bbox_to_anchor"] = bbox_anchor
+
+        leg = ax.legend(**leg_kwargs)
         leg.get_title().set_fontweight("bold")
 
     os.makedirs(output_dir, exist_ok=True)
@@ -937,7 +1011,7 @@ def create_publication_map(
     map_style: MapStyle | str = MapStyle.TOPO,
     use_basemap_tiles: bool = False,
     blend_mode: str | None = None,
-    show_legend: bool | None = None,
+    with_legend: str | bool | None = None,
     show_point_labels: bool | None = None,
     show_elevation_colorbar: bool | None = None,
     show_inset: bool | None = None,
@@ -959,7 +1033,7 @@ def create_publication_map(
         dpi=dpi,
         group_col=group_col,
         config=config,
-        show_legend=show_legend,
+        with_legend=with_legend,
         show_point_labels=show_point_labels,
         show_elevation_colorbar=show_elevation_colorbar,
         show_inset=show_inset,

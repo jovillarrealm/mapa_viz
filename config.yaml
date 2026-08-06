@@ -15,7 +15,7 @@ elevation:
   hypsometric_cmap: "publication_illustrative"
 
 cartography:
-  output_dpi: 300
+  output_dpi: 500
   fig_size: [11.5, 8.5]  # Ancho x Alto en pulgadas (formato carta horizontal)
   font_family: "sans-serif"
   grid_line_style: "--"
@@ -28,7 +28,7 @@ cartography:
   show_scale_bar: true
   scale_bar_location: [0.74, 0.05]  # Barra de escala métrica
   show_point_labels: true
-  show_legend: false  # Oculto por defecto (se activa via --show-legend)
+  with_legend: false  # Oculto por defecto (se activa via --with-legend [posicion])
   show_elevation_colorbar: false  # Oculto por defecto
   markers: ["o", "s", "^", "D", "v", "p", "P", "*", "h", "H", "X", "d", "<", ">"]
   # Vivid, color-vision-deficiency friendly publication marker palette.

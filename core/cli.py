@@ -17,7 +17,7 @@ class InteractiveCliOptions(TypedDict):
     selected_formats: list[str]
     include_web_map: bool
     dpi: int
-    override_legend: bool | None
+    override_with_legend: str | bool | None
     override_labels: bool | None
     override_colorbar: bool | None
 
@@ -182,33 +182,34 @@ def interactive_cli_menu() -> InteractiveCliOptions:
         ).unsafe_ask()
     )
 
-    dpi = 300
-    override_legend: bool | None = None
+    dpi = 500
+    override_with_legend: str | bool | None = None
     override_labels: bool | None = None
     override_colorbar: bool | None = None
 
     if customize_carto:
         legend_choice = str(
             questionary.select(
-                "Visualización de Leyenda de Puntos/Sectores:",
+                "Visualización y Posición de Leyenda:",
                 choices=[
                     questionary.Choice(
-                        title="Config por Defecto (Ocultar leyenda)", value="DEFAULT"
+                        title="Sin Leyenda (Ocultar leyenda)", value="DEFAULT"
                     ),
                     questionary.Choice(
-                        title="MOSTRAR LEYENDA (Activar en mapas)", value="SHOW"
+                        title="Leyenda Afuera (Panel Derecho - top_right_outside)", value="top_right_outside"
                     ),
                     questionary.Choice(
-                        title="OCULTAR LEYENDA (Desactivar en mapas)", value="HIDE"
+                        title="Leyenda Adentro (Superior Derecha - inside)", value="inside"
+                    ),
+                    questionary.Choice(
+                        title="Leyenda Afuera Inferior (Panel Inferior - bottom_outside)", value="bottom_outside"
                     ),
                 ],
             ).unsafe_ask()
         )
 
-        if legend_choice == "SHOW":
-            override_legend = True
-        elif legend_choice == "HIDE":
-            override_legend = False
+        if legend_choice != "DEFAULT":
+            override_with_legend = legend_choice
 
         override_labels = bool(
             questionary.confirm(
@@ -226,7 +227,7 @@ def interactive_cli_menu() -> InteractiveCliOptions:
             questionary.select(
                 "Resolución DPI de Salida:",
                 choices=[
-                    "300 (Estándar Imprenta / Revista)",
+                    "500 (Estándar Imprenta / Revista)",
                     "600 (Alta Resolución)",
                     "1200 (Ultra Alta Resolución)",
                 ],
@@ -237,7 +238,7 @@ def interactive_cli_menu() -> InteractiveCliOptions:
         elif "600" in dpi_str:
             dpi = 600
         else:
-            dpi = 300
+            dpi = 500
 
     return {
         "input_sources": input_sources,
@@ -245,7 +246,7 @@ def interactive_cli_menu() -> InteractiveCliOptions:
         "selected_formats": selected_formats,
         "include_web_map": include_web_map,
         "dpi": dpi,
-        "override_legend": override_legend,
+        "override_with_legend": override_with_legend,
         "override_labels": override_labels,
         "override_colorbar": override_colorbar,
     }
