@@ -65,6 +65,16 @@ class GroupSymbol:
     color: str
 
 
+@dataclass(frozen=True)
+class GridLabelSpec:
+    """Visible coordinate-label sides after reserving an external panel."""
+
+    top: bool = True
+    bottom: bool = True
+    left: bool = True
+    right: bool = True
+
+
 # High-contrast, color-vision-deficiency friendly colors based on the
 # Okabe-Ito family. They are intentionally vivid enough for an illustrative
 # map while retaining distinct lightness values in print.
@@ -210,6 +220,27 @@ def assign_group_symbols(
             color=palette[index % len(palette)],
         )
         for index, group in enumerate(groups)
+    )
+
+
+def build_grid_label_spec(
+    side_panel_mode: str = "none",
+    *,
+    inset_is_outside: bool = False,
+) -> GridLabelSpec:
+    """Hide side labels only when a lone external side panel would collide."""
+
+    reserved_side = side_panel_mode.strip().lower()
+    collision_side = (
+        reserved_side
+        if reserved_side in {"left", "right"} and not inset_is_outside
+        else "none"
+    )
+    return GridLabelSpec(
+        top=True,
+        bottom=True,
+        left=collision_side != "left",
+        right=collision_side != "right",
     )
 
 

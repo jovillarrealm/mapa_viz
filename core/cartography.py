@@ -18,6 +18,7 @@ from core.map_design import (
     MapPalette,
     PUBLICATION_TERRAIN_STOPS,
     assign_group_symbols,
+    build_grid_label_spec,
     build_render_spec,
     spread_overlapping_points,
 )
@@ -856,10 +857,14 @@ def render_publication_style(
         crs=ccrs.PlateCarree(),
         zorder=8,
     )
-    gl.top_labels = True
-    gl.bottom_labels = True
-    gl.left_labels = True
-    gl.right_labels = True
+    grid_labels = build_grid_label_spec(
+        has_side_panel,
+        inset_is_outside=bool(show_inset and quad_name.startswith("outside")),
+    )
+    gl.top_labels = grid_labels.top
+    gl.bottom_labels = grid_labels.bottom
+    gl.left_labels = grid_labels.left
+    gl.right_labels = grid_labels.right
     gl.xformatter = LONGITUDE_FORMATTER
     gl.yformatter = LATITUDE_FORMATTER
     gl.xlabel_style = {"size": 9, "color": palette.text, "weight": "bold"}

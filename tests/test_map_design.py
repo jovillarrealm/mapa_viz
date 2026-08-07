@@ -7,6 +7,7 @@ from core.map_design import (
     BaseLayer,
     PUBLICATION_CATEGORICAL,
     assign_group_symbols,
+    build_grid_label_spec,
     build_render_spec,
     spread_overlapping_points,
 )
@@ -51,3 +52,31 @@ def test_hybrid_basemap_makes_water_blue_and_context_translucent():
 
     assert styled.getpixel((0, 0)) == (250, 250, 248, 70)
     assert styled.getpixel((1, 0)) == (0, 119, 182, 235)
+
+
+def test_lone_external_side_legend_reserves_its_grid_label_edge():
+    right = build_grid_label_spec("right")
+    right_with_outside_inset = build_grid_label_spec(
+        "right", inset_is_outside=True
+    )
+    bottom = build_grid_label_spec("bottom")
+    none = build_grid_label_spec()
+
+    assert (right.top, right.bottom, right.left, right.right) == (
+        True,
+        True,
+        True,
+        False,
+    )
+    assert all(
+        (
+            right_with_outside_inset.top,
+            right_with_outside_inset.bottom,
+            right_with_outside_inset.left,
+            right_with_outside_inset.right,
+        )
+    )
+    assert all((bottom.top, bottom.bottom, bottom.left, bottom.right))
+    assert all((none.top, none.bottom, none.left, none.right))
+
+
