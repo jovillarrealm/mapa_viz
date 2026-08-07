@@ -122,8 +122,11 @@ mapa_viz/
 │   ├── domain.py            # Immutable Domain Models (BoundingBox, SpatialDataset, ADTs)
 │   ├── errors.py            # Explicit Domain Errors (SpatialError)
 │   ├── map_design.py        # Pure render specs, palettes, symbols, and collision transforms
+│   ├── pipeline.py          # Pure, immutable render planning and output contracts
+│   ├── tabular_schema.py    # Pure schema inference shared by all data adapters
 │   ├── cartography.py       # Cartographic Rendering Engine (Cartopy, Matplotlib)
 │   ├── dem_handler.py       # DEM fetching, WGS84 reprojection/crop, and physical hillshade
+│   ├── output_manager.py    # Transactional staging, validation, commit, and rollback
 │   ├── web_exporter.py      # Interactive Web Map HTML (Folium)
 │   ├── cli.py               # Rich Interactive Terminal Menu
 │   └── loader.py            # Ingestion helper
@@ -136,7 +139,16 @@ mapa_viz/
 └── README.md                # Project documentation
 ```
 
-The FCIS boundary is explicit: `map_design.py` is the functional core that resolves immutable layer contracts and symbol assignments; `main.py`, `dem_handler.py`, and `cartography.py` form the imperative shell that performs I/O, raster reprojection, drawing, and export.
+The FCIS boundary is explicit: `map_design.py`, `pipeline.py`, and
+`tabular_schema.py` form the functional core. They resolve immutable layer
+contracts, output matrices, filenames, and schema decisions without reading the
+clock, filesystem, network, or terminal. `main.py`, `dem_handler.py`,
+`cartography.py`, and the exporters form the imperative shell.
+
+Dataset publication is transactional. The shell renders into a sibling staging
+directory, verifies every artifact declared by the pure render plan, and only
+then replaces the public dataset directory. If ingestion, DEM retrieval,
+rendering, or export fails, the previous complete output remains available.
 
 ### 🧩 Adding Custom Data Adapters
 

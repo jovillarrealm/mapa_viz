@@ -1,15 +1,19 @@
 import os
-from typing import ClassVar
+from typing import cast
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point
 
 from core.adapters.base import BaseDataAdapter
-from core.coordinates import CoordinateParser, prepare_spatial_dataframe
+from core.coordinates import prepare_spatial_dataframe
 from core.domain import DataSource, SpatialDataset
 from core.errors import SpatialError, SpatialErrorCode
 from core.result import Err, Ok, Result
+from core.tabular_schema import (
+    coordinate_column_score,
+    detect_lat_lon_columns,
+    ensure_group_column,
+)
 
 
 class ExcelDataAdapter(BaseDataAdapter):
@@ -18,24 +22,6 @@ class ExcelDataAdapter(BaseDataAdapter):
     Inspects sheets, auto-detects latitude/longitude columns, validates coordinates,
     maps grouping categories, and builds SpatialDataset wrapped in Result[SpatialDataset, SpatialError].
     """
-
-    LAT_CANDIDATES: ClassVar[list[str]] = CoordinateParser.LAT_CANDIDATES
-    LON_CANDIDATES: ClassVar[list[str]] = CoordinateParser.LON_CANDIDATES
-
-    GROUP_CANDIDATES: ClassVar[list[str]] = [
-        "sector",
-        "species cordylancistrus clade tree",
-        "species",
-        "especie",
-        "codigo",
-        "code",
-        "drainage",
-        "cuenca",
-        "site",
-        "sitio",
-        "country",
-        "pais",
-    ]
 
     def can_handle(self, source: DataSource) -> bool:
         if isinstance(source, gpd.GeoDataFrame):
@@ -56,93 +42,12 @@ class ExcelDataAdapter(BaseDataAdapter):
         for sheet in xl.sheet_names:
             df_parsed = xl.parse(sheet, nrows=10)
             assert isinstance(df_parsed, pd.DataFrame)
-            cols_lower = [str(c).strip().lower() for c in df_parsed.columns]
-            score = 0
-            for c in cols_lower:
-                if c in self.LAT_CANDIDATES:
-                    score += 5
-                if c in self.LON_CANDIDATES:
-                    score += 5
+            score = coordinate_column_score(df_parsed.columns)
             if score > max_coord_score:
                 max_coord_score = score
                 best_sheet = sheet
 
         return best_sheet
-
-    def _detect_lat_lon_columns(
-        self, df: pd.DataFrame, lat_col: str | None, lon_col: str | None
-    ) -> tuple[str, str] | None:
-        cols = [str(c).strip() for c in df.columns]
-        col_map = {str(c).strip(): c for c in df.columns}
-
-        # Explicit user specified
-        if lat_col and lon_col and lat_col in col_map and lon_col in col_map:
-            return col_map[lat_col], col_map[lon_col]
-
-        found_lat = None
-        found_lon = None
-
-        # Named candidates search
-        for c in cols:
-            clower = c.lower()
-            if not found_lat and clower in self.LAT_CANDIDATES:
-                found_lat = col_map[c]
-            if not found_lon and clower in self.LON_CANDIDATES:
-                found_lon = col_map[c]
-
-        # Handle 'X' and 'Y' case (e.g. X=Lat, Y=Lon or vice versa)
-        if not found_lat or not found_lon:
-            x_col = next((col_map[c] for c in cols if c.lower() == "x"), None)
-            y_col = next((col_map[c] for c in cols if c.lower() == "y"), None)
-
-            if x_col and y_col:
-                x_vals = pd.to_numeric(df[x_col], errors="coerce").dropna()
-                y_vals = pd.to_numeric(df[y_col], errors="coerce").dropna()
-
-                if len(x_vals) > 0 and len(y_vals) > 0:
-                    if (x_vals.min() >= -15 and x_vals.max() <= 35) and (
-                        y_vals.min() <= -30 and y_vals.max() >= -120
-                    ):
-                        found_lat, found_lon = x_col, y_col
-                    elif (y_vals.min() >= -15 and y_vals.max() <= 35) and (
-                        x_vals.min() <= -30 and x_vals.max() >= -120
-                    ):
-                        found_lat, found_lon = y_col, x_col
-
-        # Sanity check lat/lon values
-        if found_lat and found_lon:
-            lat_vals = pd.to_numeric(df[found_lat], errors="coerce").dropna()
-            lon_vals = pd.to_numeric(df[found_lon], errors="coerce").dropna()
-            if (
-                len(lat_vals) > 0
-                and len(lon_vals) > 0
-                and lat_vals.mean() < -30
-                and lon_vals.mean() > 0
-            ):
-                found_lat, found_lon = found_lon, found_lat
-
-        if not found_lat or not found_lon:
-            return None
-
-        return found_lat, found_lon
-
-    def _detect_group_column(self, df: pd.DataFrame, user_group_col: str | None) -> str:
-        cols = [str(c).strip() for c in df.columns]
-        col_map = {str(c).strip(): c for c in df.columns}
-
-        if user_group_col and user_group_col in col_map:
-            return col_map[user_group_col]
-
-        for c in cols:
-            if c.lower() in self.GROUP_CANDIDATES:
-                return col_map[c]
-
-        str_cols = df.select_dtypes(include=["object", "category"]).columns
-        if len(str_cols) > 0:
-            return str_cols[0]
-
-        df["Group"] = "Puntos de Muestreo"
-        return "Group"
 
     def adapt(
         self,
@@ -178,7 +83,7 @@ class ExcelDataAdapter(BaseDataAdapter):
                 assert isinstance(df_parsed, pd.DataFrame)
                 df = df_parsed
 
-            detected_cols = self._detect_lat_lon_columns(df, lat_col, lon_col)
+            detected_cols = detect_lat_lon_columns(df, lat_col, lon_col)
             if detected_cols is None:
                 return Err(
                     SpatialError(
@@ -190,23 +95,22 @@ class ExcelDataAdapter(BaseDataAdapter):
                 )
 
             resolved_lat, resolved_lon = detected_cols
-            resolved_group = self._detect_group_column(df, group_col)
+            df, resolved_group = ensure_group_column(df, group_col)
 
             prep_result = prepare_spatial_dataframe(
                 df, lat_col=resolved_lat, lon_col=resolved_lon, source_crs=crs
             )
-            match prep_result:
-                case Err(err):
-                    return Err(
-                        SpatialError(
-                            code=err.code,
-                            message=err.message,
-                            source_path=source_path,
-                            details=err.details,
-                        )
+            if isinstance(prep_result, Err):
+                error = cast(SpatialError, prep_result.error)
+                return Err(
+                    SpatialError(
+                        code=error.code,
+                        message=error.message,
+                        source_path=source_path,
+                        details=error.details,
                     )
-                case Ok((gdf, effective_crs)):
-                    pass
+                )
+            gdf, effective_crs = prep_result.unwrap()
 
             dataset_name = self.derive_dataset_name(source)
 

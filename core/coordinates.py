@@ -1,8 +1,7 @@
 import re
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 
 from core.errors import SpatialError, SpatialErrorCode
@@ -184,7 +183,7 @@ class CoordinateParser:
     @classmethod
     def parse_coordinate_series(cls, series: pd.Series) -> pd.Series:
         """Vectorized / mapped parsing of a pandas Series into float coordinates."""
-        return series.apply(cls.parse_single_coordinate)
+        return cast(pd.Series, series.apply(cls.parse_single_coordinate))
 
     @classmethod
     def normalize_crs(cls, crs_input: str) -> str:

@@ -20,12 +20,19 @@ from core.cartography import render_publication_style
 from core.cli import interactive_cli_menu, print_summary_table
 from core.config import AppConfig, parse_config
 from core.dem_handler import get_dem_and_hillshade
-from core.domain import ExportFormat, MapStyle, ProcessingSummary
+from core.domain import ProcessingSummary
 from core.output_manager import (
-    prepare_dataset_output_directory,
+    missing_artifacts,
     remove_legacy_root_artifacts,
+    staged_dataset_output_directory,
 )
-from core.result import Err, Ok
+from core.pipeline import (
+    CartographyOverrides,
+    DatasetRunOptions,
+    dataset_output_directory,
+    resolve_render_selection,
+)
+from core.result import Err
 from core.web_exporter import export_web_map
 from generate_sample_data import create_sample_excel
 
@@ -43,106 +50,41 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
 
 def process_single_dataset(
     input_source: str,
-    args: argparse.Namespace,
+    options: DatasetRunOptions,
     cfg: AppConfig,
-    selected_styles: list[str] | None = None,
-    selected_formats: list[str] | None = None,
-    include_web_map: bool = True,
 ) -> ProcessingSummary:
     print("\n=========================================================================")
     print(f"      PROCESSING DATASET: {os.path.basename(input_source)}")
     print("=========================================================================")
 
-    raw_styles = selected_styles or getattr(args, "styles", ["all"])
-    raw_formats = selected_formats or getattr(args, "formats", ["all"])
-
-    # Resolve MapStyles
-    if "all" in raw_styles:
-        active_styles = [
-            MapStyle.TOPO,
-            MapStyle.HYBRID_AQUATIC,
-            MapStyle.BASEMAP,
-        ]
-    else:
-        active_styles = []
-        for s in raw_styles:
-            s_lower = str(s).lower()
-            match s_lower:
-                case "publicacion" | "publication" | "hybrid" | "hybrid_aquatic" | "hybrid1" | "dem_plus_basemap":
-                    active_styles.append(MapStyle.HYBRID_AQUATIC)
-                case "topological" | "topologico" | "topo" | "topographic":
-                    active_styles.append(MapStyle.TOPO)
-                case "basemap" | "clean_png" | "clean_basemap":
-                    active_styles.append(MapStyle.BASEMAP)
-                case _:
-                    active_styles.append(MapStyle.HYBRID_AQUATIC)
-
-    # Resolve ExportFormats
-    if "all" in raw_formats:
-        active_formats = [
-            ExportFormat.PDF,
-            ExportFormat.PNG,
-            ExportFormat.TIFF,
-            ExportFormat.JPEG_XL,
-        ]
-    else:
-        active_formats = []
-        for f in raw_formats:
-            f_lower = str(f).lower()
-            match f_lower:
-                case "pdf":
-                    active_formats.append(ExportFormat.PDF)
-                case "png":
-                    active_formats.append(ExportFormat.PNG)
-                case "tif" | "tiff":
-                    active_formats.append(ExportFormat.TIFF)
-                case "jxl" | "jpegxl":
-                    active_formats.append(ExportFormat.JPEG_XL)
-                case "web" | "web_html" | "html":
-                    include_web_map = True
-                # Legacy style+format flags fallback
-                case "hybrid1":
-                    if MapStyle.HYBRID_AQUATIC not in active_styles:
-                        active_styles.append(MapStyle.HYBRID_AQUATIC)
-                    if ExportFormat.PNG not in active_formats:
-                        active_formats.append(ExportFormat.PNG)
-                case "clean_png":
-                    if MapStyle.BASEMAP not in active_styles:
-                        active_styles.append(MapStyle.BASEMAP)
-                    if ExportFormat.PNG not in active_formats:
-                        active_formats.append(ExportFormat.PNG)
-
     # 1. Ingestion via Data Adapter Architecture returning Result[SpatialDataset, SpatialError]
     print(f"\n--> 1. Ingesting & Adapting spatial data: {input_source}")
     ingest_result = load_dataset(
         source=input_source,
-        lat_col=getattr(args, "lat_col", None),
-        lon_col=getattr(args, "lon_col", None),
-        group_col=getattr(args, "group_col", None),
-        crs=getattr(args, "crs", "EPSG:4326"),
+        lat_col=options.lat_col,
+        lon_col=options.lon_col,
+        group_col=options.group_col,
+        crs=options.crs,
     )
 
-    match ingest_result:
-        case Err(error):
-            print(f"[ERROR] Failed to ingest spatial dataset '{input_source}': {error}")
-            return {
-                "dataset_name": os.path.basename(input_source),
-                "num_points": 0,
-                "output_dir": "FAILED",
-                "num_files": 0,
-                "error": str(error),
-            }
-        case Ok(dataset):
-            gdf = dataset.gdf
-            dataset_name = dataset.name
-            group_col = dataset.group_col
+    if isinstance(ingest_result, Err):
+        error = ingest_result.error
+        print(f"[ERROR] Failed to ingest spatial dataset '{input_source}': {error}")
+        return {
+            "dataset_name": os.path.basename(input_source),
+            "num_points": 0,
+            "output_dir": "FAILED",
+            "num_files": 0,
+            "error": str(error),
+        }
+
+    dataset = ingest_result.value
+    gdf = dataset.gdf
+    dataset_name = dataset.name
+    group_col = dataset.group_col
 
     # Read CLI / interactive cartographic overrides
-    override_with_legend = getattr(args, "with_legend", None)
-    override_labels = getattr(args, "override_labels", None)
-    override_colorbar = getattr(args, "override_colorbar", None)
-    override_inset = getattr(args, "override_inset", None)
-    override_inset_pos = getattr(args, "inset_position", None)
+    overrides = options.overrides
 
     print(
         f"    [OK] Dataset '{dataset_name}' loaded successfully! "
@@ -151,16 +93,11 @@ def process_single_dataset(
 
     # Determine isolated output directory for this dataset
     timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
-    if getattr(args, "unique_dirs", False):
-        dataset_output_dir = os.path.join(
-            args.output_dir, f"{dataset_name}_{timestamp}"
-        )
-    else:
-        dataset_output_dir = os.path.join(args.output_dir, dataset_name)
-
-    prepare_dataset_output_directory(
-        dataset_output_dir,
-        replace_existing=not getattr(args, "unique_dirs", False),
+    dataset_output_dir = dataset_output_directory(
+        options.output_dir,
+        dataset_name,
+        unique_dirs=options.unique_dirs,
+        timestamp=timestamp,
     )
     print(
         f"    [Output Directory] Isolated artifacts saved to: {os.path.abspath(dataset_output_dir)}"
@@ -170,52 +107,64 @@ def process_single_dataset(
     print("\n--> 2. Fetching DEM elevation & computing 3D Hillshade relief...")
     dem_tuple = get_dem_and_hillshade(
         gdf=gdf,
-        padding=getattr(args, "padding", 0.35),
+        padding=options.padding,
         azimuth=cfg.get("elevation", {}).get("azimuth_deg", 315.0),
         altitude=cfg.get("elevation", {}).get("altitude_deg", 45.0),
     )
     print("    [OK] DEM Elevation & 3D Hillshade matrix ready.")
 
     # 3. Static Publication Cartography & Decoupled Matrix Rendering
-    dpi = getattr(args, "dpi", 500)
-    style_names = [s.value for s in active_styles]
-    format_names = [f.value for f in active_formats]
+    render_plan = options.render
+    style_names = [style.value for style in render_plan.styles]
+    format_names = [export_format.value for export_format in render_plan.formats]
     print(
-        f"\n--> 3. Generating cartographic matrix ({dpi} DPI)... "
+        f"\n--> 3. Generating cartographic matrix ({options.dpi} DPI)... "
         f"Styles: {style_names} × Formats: {format_names}"
     )
 
-    rendered_files = []
+    with staged_dataset_output_directory(
+        dataset_output_dir,
+        replace_existing=not options.unique_dirs,
+    ) as staging_dir:
+        for style in render_plan.styles:
+            render_publication_style(
+                gdf=gdf,
+                dem_tuple=dem_tuple,
+                output_dir=staging_dir,
+                map_style=style,
+                formats=list(render_plan.formats),
+                dpi=options.dpi,
+                group_col=group_col,
+                config=cfg,
+                with_legend=overrides.with_legend,
+                show_point_labels=overrides.show_point_labels,
+                show_elevation_colorbar=overrides.show_elevation_colorbar,
+                show_inset=overrides.show_inset,
+                inset_position=overrides.inset_position,
+            )
 
-    for style in active_styles:
-        outputs = render_publication_style(
-            gdf=gdf,
-            dem_tuple=dem_tuple,
-            output_dir=dataset_output_dir,
-            map_style=style,
-            formats=active_formats,
-            dpi=dpi,
-            group_col=group_col,
-            config=cfg,
-            with_legend=override_with_legend,
-            show_point_labels=override_labels,
-            show_elevation_colorbar=override_colorbar,
-            show_inset=override_inset,
-            inset_position=override_inset_pos,
-        )
-        rendered_files.extend(outputs)
+        # 4. Interactive Web Map HTML (Standalone HTML output)
+        if render_plan.include_web_map:
+            print("\n--> 4. Exporting GPU interactive Web Map (HTML)...")
+            export_web_map(
+                gdf=gdf,
+                output_path=os.path.join(staging_dir, "mapa_interactivo.html"),
+                group_col=group_col,
+                title=f"Mapa de {dataset_name}",
+            )
 
-    # 4. Interactive Web Map HTML (Standalone HTML output)
-    if include_web_map:
-        print("\n--> 4. Exporting GPU interactive Web Map (HTML)...")
-        web_path = os.path.join(dataset_output_dir, "mapa_interactivo.html")
-        export_web_map(
-            gdf=gdf,
-            output_path=web_path,
-            group_col=group_col,
-            title=f"Mapa de {dataset_name}",
+        missing = missing_artifacts(
+            staging_dir, render_plan.expected_artifact_names
         )
-        rendered_files.append(web_path)
+        if missing:
+            raise RuntimeError(
+                "Render completed without planned artifacts: " + ", ".join(missing)
+            )
+
+    rendered_files = [
+        os.path.join(dataset_output_dir, name)
+        for name in render_plan.expected_artifact_names
+    ]
 
     print("\n-------------------------------------------------------------------------")
     print(
@@ -495,6 +444,29 @@ EJEMPLOS DE USO / USAGE EXAMPLES:
     print(f"      Data Adapters Loaded | Target Datasets: {len(target_files)}")
     print("=========================================================================")
 
+    run_options = DatasetRunOptions(
+        render=resolve_render_selection(
+            selected_styles,
+            selected_formats,
+            include_web_map=include_web_map,
+        ),
+        output_dir=args.output_dir,
+        unique_dirs=args.unique_dirs,
+        dpi=args.dpi,
+        padding=args.padding,
+        lat_col=args.lat_col,
+        lon_col=args.lon_col,
+        group_col=args.group_col,
+        crs=args.crs,
+        overrides=CartographyOverrides(
+            with_legend=args.with_legend,
+            show_point_labels=args.override_labels,
+            show_elevation_colorbar=args.override_colorbar,
+            show_inset=args.override_inset,
+            inset_position=args.inset_position,
+        ),
+    )
+
     removed_legacy_artifacts = remove_legacy_root_artifacts(args.output_dir)
     if removed_legacy_artifacts:
         print(
@@ -507,11 +479,8 @@ EJEMPLOS DE USO / USAGE EXAMPLES:
         try:
             res = process_single_dataset(
                 file_path,
-                args,
+                run_options,
                 cfg,
-                selected_styles=selected_styles,
-                selected_formats=selected_formats,
-                include_web_map=include_web_map,
             )
             summary_results.append(res)
         except Exception as e:

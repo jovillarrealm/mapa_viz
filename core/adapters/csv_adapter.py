@@ -1,15 +1,14 @@
 import os
+from typing import cast
 
-import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point
 
 from core.adapters.base import BaseDataAdapter
-from core.adapters.excel_adapter import ExcelDataAdapter
 from core.coordinates import prepare_spatial_dataframe
 from core.domain import DataSource, SpatialDataset
 from core.errors import SpatialError, SpatialErrorCode
 from core.result import Err, Ok, Result
+from core.tabular_schema import detect_lat_lon_columns, ensure_group_column
 
 
 class CSVDataAdapter(BaseDataAdapter):
@@ -55,8 +54,7 @@ class CSVDataAdapter(BaseDataAdapter):
             except Exception:
                 df = pd.read_csv(source_path, sep=None, engine="python")
 
-            excel_helper = ExcelDataAdapter()
-            detected_cols = excel_helper._detect_lat_lon_columns(df, lat_col, lon_col)
+            detected_cols = detect_lat_lon_columns(df, lat_col, lon_col)
             if detected_cols is None:
                 return Err(
                     SpatialError(
@@ -68,23 +66,22 @@ class CSVDataAdapter(BaseDataAdapter):
                 )
 
             resolved_lat, resolved_lon = detected_cols
-            resolved_group = excel_helper._detect_group_column(df, group_col)
+            df, resolved_group = ensure_group_column(df, group_col)
 
             prep_result = prepare_spatial_dataframe(
                 df, lat_col=resolved_lat, lon_col=resolved_lon, source_crs=crs
             )
-            match prep_result:
-                case Err(err):
-                    return Err(
-                        SpatialError(
-                            code=err.code,
-                            message=err.message,
-                            source_path=source_path,
-                            details=err.details,
-                        )
+            if isinstance(prep_result, Err):
+                error = cast(SpatialError, prep_result.error)
+                return Err(
+                    SpatialError(
+                        code=error.code,
+                        message=error.message,
+                        source_path=source_path,
+                        details=error.details,
                     )
-                case Ok((gdf, effective_crs)):
-                    pass
+                )
+            gdf, effective_crs = prep_result.unwrap()
 
             dataset_name = self.derive_dataset_name(source)
 

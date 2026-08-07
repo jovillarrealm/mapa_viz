@@ -4,10 +4,10 @@ import geopandas as gpd
 import pandas as pd
 
 from core.adapters.base import BaseDataAdapter
-from core.adapters.excel_adapter import ExcelDataAdapter
 from core.domain import DataSource, SpatialDataset
 from core.errors import SpatialError, SpatialErrorCode
 from core.result import Err, Ok, Result
+from core.tabular_schema import ensure_group_column
 
 
 class VectorDataAdapter(BaseDataAdapter):
@@ -65,8 +65,7 @@ class VectorDataAdapter(BaseDataAdapter):
             else:
                 gdf = gdf.to_crs(crs)
 
-            excel_helper = ExcelDataAdapter()
-            resolved_group = excel_helper._detect_group_column(gdf, group_col)
+            gdf, resolved_group = ensure_group_column(gdf, group_col)
 
             lat_name = lat_col or "latitude"
             lon_name = lon_col or "longitude"

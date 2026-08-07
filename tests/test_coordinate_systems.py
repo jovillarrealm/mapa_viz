@@ -1,8 +1,7 @@
 import pandas as pd
 import pytest
-from shapely.geometry import Point
 
-from core.adapters import CSVDataAdapter, ExcelDataAdapter
+from core.adapters import ExcelDataAdapter
 from core.coordinates import CoordinateParser, prepare_spatial_dataframe
 from core.result import Ok
 
@@ -55,7 +54,7 @@ def test_projected_crs_reprojection_magna():
         df, lat_col="Norte", lon_col="Este", source_crs="EPSG:9377"
     )
     assert isinstance(res, Ok)
-    gdf, crs_str = res.value
+    gdf, crs_str = res.unwrap()
     assert str(gdf.crs) == "EPSG:4326"
     assert pytest.approx(gdf.geometry.y.iloc[0], 0.1) == 6.24
     assert pytest.approx(gdf.geometry.x.iloc[0], 0.1) == -75.58
@@ -75,7 +74,7 @@ def test_projected_crs_reprojection_utm():
         df, lat_col="Northing", lon_col="Easting", source_crs="UTM 18N"
     )
     assert isinstance(res, Ok)
-    gdf, crs_str = res.value
+    gdf, crs_str = res.unwrap()
     assert str(gdf.crs) == "EPSG:4326"
     assert -90 <= gdf.geometry.y.iloc[0] <= 90
     assert -180 <= gdf.geometry.x.iloc[0] <= 180
@@ -94,7 +93,7 @@ def test_auto_infer_projected_crs():
 
     res = prepare_spatial_dataframe(df, lat_col="y", lon_col="x", source_crs="EPSG:4326")
     assert isinstance(res, Ok)
-    gdf, crs_str = res.value
+    gdf, crs_str = res.unwrap()
     assert str(gdf.crs) == "EPSG:4326"
     assert pytest.approx(gdf.geometry.y.iloc[0], 0.1) == 6.24
     assert pytest.approx(gdf.geometry.x.iloc[0], 0.1) == -75.58
@@ -111,7 +110,7 @@ def test_excel_adapter_with_dms_coordinates():
     adapter = ExcelDataAdapter()
     res = adapter.adapt(df)
     assert isinstance(res, Ok)
-    dataset = res.value
+    dataset = res.unwrap()
     assert dataset.num_points == 2
     assert pytest.approx(dataset.gdf.geometry.y.iloc[0], 1e-3) == 6.244
     assert pytest.approx(dataset.gdf.geometry.x.iloc[0], 1e-3) == -75.581

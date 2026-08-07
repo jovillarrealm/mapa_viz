@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Never, TypeVar
 from collections.abc import Callable
 
 T = TypeVar("T")
@@ -22,10 +22,10 @@ class Ok[T]:
     def unwrap(self) -> T:
         return self.value
 
-    def unwrap_or(self, default: T) -> T:
+    def unwrap_or(self, default: object) -> T:
         return self.value
 
-    def map(self, fn: Callable[[T], U]) -> Result[U, E]:
+    def map(self, fn: Callable[[T], U]) -> Ok[U]:
         return Ok(fn(self.value))
 
     def and_then(self, fn: Callable[[T], Result[U, E]]) -> Result[U, E]:
@@ -44,16 +44,16 @@ class Err[E]:
     def is_err(self) -> bool:
         return True
 
-    def unwrap(self) -> T:
+    def unwrap(self) -> Never:
         raise ValueError(f"Called unwrap on Err: {self.error}")
 
     def unwrap_or(self, default: T) -> T:
         return default
 
-    def map(self, fn: Callable[[T], U]) -> Result[U, E]:
+    def map(self, fn: Callable[[T], U]) -> Err[E]:
         return Err(self.error)
 
-    def and_then(self, fn: Callable[[T], Result[U, E]]) -> Result[U, E]:
+    def and_then(self, fn: Callable[[T], Result[U, E]]) -> Err[E]:
         return Err(self.error)
 
 

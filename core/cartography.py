@@ -21,6 +21,7 @@ from core.map_design import (
     build_render_spec,
     spread_overlapping_points,
 )
+from core.pipeline import artifact_filename
 
 matplotlib.use("Agg")
 import matplotlib.colors as mcolors
@@ -668,12 +669,9 @@ def render_publication_style(
         inset_position_setting = inset_position
 
     show_inset = effective_show_inset
-    show_inset = effective_show_inset
     show_point_labels = effective_show_labels
     show_legend = effective_show_legend
     show_elevation_colorbar = effective_show_colorbar
-
-    resolved_style = render_spec.style.value
 
     fig = plt.figure(figsize=fig_size, dpi=100)
 
@@ -927,12 +925,7 @@ def render_publication_style(
     # Save figure to all requested export formats in memory from this SINGLE render!
     for fmt in active_formats:
         fmt_enum = fmt if isinstance(fmt, ExportFormat) else ExportFormat(str(fmt))
-        if resolved_style in ["topo", "topographic", "topological", "topologico"]:
-            filename = f"mapa_topologico.{fmt_enum.value}"
-        elif resolved_style in ["hybrid_aquatic", "hybrid", "publicacion", "publication"]:
-            filename = f"mapa_publicacion.{fmt_enum.value}"
-        else:
-            filename = f"mapa_{resolved_style}.{fmt_enum.value}"
+        filename = artifact_filename(render_spec.style, fmt_enum)
 
         output_path = os.path.join(output_dir, filename)
 

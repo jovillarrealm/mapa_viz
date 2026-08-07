@@ -1,9 +1,9 @@
 import geopandas as gpd
 import pandas as pd
 
-from core.adapters.excel_adapter import ExcelDataAdapter
 from core.adapters.registry import load_dataset
 from core.result import Err
+from core.tabular_schema import detect_lat_lon_columns as infer_lat_lon_columns
 
 
 def detect_lat_lon_columns(
@@ -11,9 +11,8 @@ def detect_lat_lon_columns(
     lat_col: str | None = None,
     lon_col: str | None = None,
 ) -> tuple[str, str]:
-    """Backwards compatibility wrapper for detect_lat_lon_columns using ExcelDataAdapter."""
-    adapter = ExcelDataAdapter()
-    cols = adapter._detect_lat_lon_columns(df, lat_col, lon_col)
+    """Backwards compatibility wrapper for shared schema inference."""
+    cols = infer_lat_lon_columns(df, lat_col, lon_col)
     if cols is None:
         raise ValueError(
             f"Failed to detect Latitude and Longitude columns. Columns: {list(df.columns)}"
