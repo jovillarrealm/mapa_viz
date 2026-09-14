@@ -22,7 +22,7 @@ cartography:
   grid_alpha: 0.35
   marker_size: 75
   show_inset: true
-  inset_position: "top_left"  # Submap location: top_left (default), top_right, bottom_left, bottom_right, auto, outside
+  inset_position: "top_right"  # Submap location: top_left, top_right (default), bottom_left, bottom_right, auto, outside
   show_compass: true
   compass_location: [0.88, 0.18]  # Rosa de los vientos
   show_scale_bar: true

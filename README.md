@@ -10,7 +10,7 @@ This is vibe coded. I will give this code some love and poor engineering decisio
 ## ✨ Key Features
 
 - 📄 **300 DPI Publication-Grade Cartography**: Renders vector PDFs, high-resolution PNGs, press-ready TIFFs, ultra-compact JPEG XL (`.jxl`), and GPU-accelerated interactive web maps (HTML).
-- 🌊 **Zero-Distortion Aquatic Basemap Overlay**: Uses Web Mercator tile-grid bounds stitching to eliminate aspect ratio distortion between elevation topology and aquatic layers.
+- 🌊 **Aquatic Publication Layer**: Blends authenticated CARTO water detail over aligned DEM relief, with emphasized Natural Earth lakes and rivers.
 - 📉 **Journal File Size Limit Optimization (< 10MB)**: Uses Adobe Deflate and LZW compression algorithms for TIFF and PNG formats to guarantee compliance with academic journal upload constraints (< 10 MB per file).
 - 🦀 **Rust-Inspired `Result[T, E]` Error Handling**: Eliminates silent exceptions and `NoneType` crashes using explicit `Ok[T]` and `Err[E]` monads with Python 3.14 `match / case` pattern matching.
 - 🖥️ **Interactive Terminal CLI**: Built with `rich` panels and `questionary` interactive prompts for easy dataset selection, format toggles, and cartographic customization.
@@ -64,10 +64,31 @@ Static styles share one ordered publication stack:
 | Style | Base | Relief | Hydrography |
 | :--- | :--- | :--- | :--- |
 | `topo` | Vivid illustrative hypsometric DEM | Physically scaled AWS DEM hillshade | High-contrast Natural Earth lakes and selected rivers |
-| `hybrid_aquatic` / `publicacion` | Vivid DEM + translucent CartoDB context | Physically scaled AWS DEM hillshade | Saturated-blue basemap water/drainage plus emphasized Natural Earth lakes and rivers |
+| `hybrid_aquatic` / `publicacion` | Vivid DEM + translucent CARTO context | Physically scaled AWS DEM hillshade | Saturated-blue basemap water/drainage plus emphasized Natural Earth lakes and rivers |
 | `basemap` | CartoDB Light, no labels | None | Minimal Natural Earth hydrography |
 
 AWS Web Mercator tiles are reprojected and cropped to the exact WGS84 map extent before rendering. This is what keeps relief, Natural Earth vectors, rivers, and markers spatially aligned.
+
+### CARTO key for publication and basemap styles
+
+Request a [free CARTO Basemaps key](https://carto.com/basemaps/apikey/) and set
+`CARTO_BASEMAP_API_KEY` in your environment, or put it in a local `.env` file
+(ignored by Git):
+
+```dotenv
+CARTO_BASEMAP_API_KEY=your_key_here
+```
+
+Load that file when running the app: `uv run --env-file .env main.py` (append the
+usual CLI options). `topo` does not require a key. Without a key, publication and
+basemap rendering stops before writing output: unauthenticated CARTO tiles
+contain an "API KEY REQUIRED" watermark that looks like diagonal lines when
+the mosaic is reduced to map scale.
+
+The free tier includes research and allows 5 million tile requests per month.
+[CARTO's terms, §9(d) and §13](https://carto.com/legal/basemap-terms/) permit
+static illustrative/editorial/documentary images with legible attribution.
+Exports using CARTO include `© OpenStreetMap contributors · © CARTO` on the map.
 
 ### Non-Interactive Command Examples
 

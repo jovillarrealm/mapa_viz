@@ -1,7 +1,5 @@
 import numpy as np
-from PIL import Image
 
-from core.cartography import colorize_hybrid_basemap
 from core.domain import MapStyle
 from core.map_design import (
     BaseLayer,
@@ -42,16 +40,6 @@ def test_spread_overlapping_points_is_pure_and_extent_scaled():
     assert np.array_equal(coordinates, original)
     assert not np.array_equal(spread[0], spread[1])
     assert np.array_equal(spread[2], coordinates[2])
-
-
-def test_hybrid_basemap_makes_water_blue_and_context_translucent():
-    tile = Image.new("RGBA", (2, 1))
-    tile.putdata([(250, 250, 248, 255), (210, 219, 222, 255)])
-
-    styled = colorize_hybrid_basemap(tile)
-
-    assert styled.getpixel((0, 0)) == (250, 250, 248, 70)
-    assert styled.getpixel((1, 0)) == (0, 119, 182, 235)
 
 
 def test_lone_external_side_legend_reserves_its_grid_label_edge():

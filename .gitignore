@@ -5,3 +5,4 @@
 inputs/
 scratch/
 output/
+.env

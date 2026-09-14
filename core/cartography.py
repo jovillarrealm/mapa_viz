@@ -1,6 +1,7 @@
 import io
 import os
 from functools import lru_cache
+from urllib.parse import urlencode
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -39,40 +40,37 @@ class CartoDBNoLabels(cimgt.GoogleWTS):
     CartoDB Positron No-Labels tile basemap.
     """
 
+    def __init__(self) -> None:
+        self.api_key = os.environ.get("CARTO_BASEMAP_API_KEY", "").strip()
+        if not self.api_key:
+            raise ValueError(
+                "Set CARTO_BASEMAP_API_KEY before rendering publication/basemap maps. "
+                "Get a free key at https://carto.com/basemaps/apikey/. "
+                "Unauthenticated tiles contain a diagonal watermark."
+            )
+        super().__init__()
+
     def _image_url(self, tile: tuple[int, int, int]) -> str:
         x, y, z = tile
-        return f"https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png"
+        query = urlencode({"key": self.api_key})
+        return f"https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png?{query}"
 
 
 def colorize_hybrid_basemap(image: Image.Image) -> Image.Image:
     """Make CartoDB water unmistakably blue while retaining faint context."""
-
     rgba = np.array(image.convert("RGBA"), dtype=np.uint8)
     red = rgba[:, :, 0].astype(np.int16)
     green = rgba[:, :, 1].astype(np.int16)
     blue = rgba[:, :, 2].astype(np.int16)
-
-    # CartoDB Light water pixels are cool gray-blue (for example 210/219/222),
-    # while land is warm off-white (typically 250/250/248). The simultaneous
-    # channel deltas avoid confusing pale roads or warm administrative lines
-    # with water.
-    water = (
-        (red < 240)
-        & ((green - red) >= 4)
-        & ((blue - red) >= 5)
-        & (blue >= green)
-    )
-
+    # Water is cool gray-blue; land and roads are neutral or warm off-white.
+    water = (red < 240) & ((green - red) >= 4) & ((blue - red) >= 5) & (blue >= green)
     rgba[:, :, 3] = 70
-    rgba[water, 0] = 0
-    rgba[water, 1] = 119
-    rgba[water, 2] = 182
-    rgba[water, 3] = 235
+    rgba[water] = (0, 119, 182, 235)
     return Image.fromarray(rgba)
 
 
 class CartoDBBlueWaterOverlay(CartoDBNoLabels):
-    """CartoDB context with vivid blue water and translucent non-water pixels."""
+    """Authenticated CartoDB context with vivid blue water."""
 
     def get_image(
         self, tile: tuple[int, int, int]
@@ -182,7 +180,8 @@ def resolve_inset_location(
     pos_str = str(position).lower() if position and isinstance(position, str) else "top_left"
 
     if pos_str in ["outside", "outside_right"]:
-        inset_loc = [0.72, 0.54, 0.22, 0.34]
+        # Keep the inset below the external legend when both use the right panel.
+        inset_loc = [0.72, 0.05, 0.22, 0.34]
         return inset_loc, "outside_right", (0.08, 0.06, 0.62, 0.88)
 
     if pos_str == "outside_left":
@@ -616,6 +615,14 @@ def render_publication_style(
         map_style,
         configured_hillshade_alpha=elev_cfg.get("hillshade_alpha"),
     )
+    # Validate credentials before creating a figure or writing any output.
+    tile_source = None
+    if render_spec.basemap_alpha > 0:
+        tile_source = (
+            CartoDBBlueWaterOverlay()
+            if render_spec.base_layer is BaseLayer.HYPSOMETRIC
+            else CartoDBNoLabels()
+        )
     palette = render_spec.palette
     markers = cart_cfg.get("markers") or None
     colors = cart_cfg.get("colors") or palette.categorical
@@ -709,17 +716,15 @@ def render_publication_style(
             zorder=1,
         )
     else:
-        try:
-            ax.add_image(
-                CartoDBNoLabels(),
-                10,
-                interpolation="bilinear",
-                alpha=1.0,
-                zorder=1,
-            )
-            print("[Cartography] Rendered clean CartoDB Light basemap base.")
-        except Exception as e:
-            print(f"[Cartography] Basemap tiles fetch failed: {e}")
+        assert tile_source is not None
+        ax.add_image(
+            tile_source,
+            10,
+            interpolation="bilinear",
+            alpha=render_spec.basemap_alpha,
+            zorder=1,
+        )
+        print("[Cartography] Rendered authenticated CartoDB Light basemap base.")
 
     if render_spec.hillshade_alpha > 0:
         ax.imshow(
@@ -733,27 +738,23 @@ def render_publication_style(
             zorder=2,
         )
 
-    # Hybrid styles retain the DEM as their base and add the complete no-label
-    # basemap as a translucent layer. This exposes mapped lakes, reservoirs,
-    # wetlands, and drainage context without replacing the elevation colors.
-    if (
-        render_spec.base_layer is BaseLayer.HYPSOMETRIC
-        and render_spec.basemap_alpha > 0
-    ):
-        try:
-            ax.add_image(
-                CartoDBBlueWaterOverlay(),
-                10,
-                interpolation="bilinear",
-                alpha=render_spec.basemap_alpha,
-                zorder=3,
-            )
-            print(
-                "[Cartography] Blended vivid-blue CartoDB water/context "
-                f"basemap over DEM relief (alpha={render_spec.basemap_alpha:.2f})."
-            )
-        except Exception as e:
-            print(f"[Cartography] Hybrid basemap overlay failed: {e}")
+    if render_spec.base_layer is BaseLayer.HYPSOMETRIC and tile_source is not None:
+        ax.add_image(
+            tile_source,
+            10,
+            interpolation="bilinear",
+            alpha=render_spec.basemap_alpha,
+            zorder=3,
+        )
+        print("[Cartography] Blended authenticated CartoDB water/context over DEM relief.")
+
+    if tile_source is not None:
+        ax.text(
+            0.01, 0.005, "© OpenStreetMap contributors · © CARTO",
+            transform=ax.transAxes, fontsize=7, color=palette.text,
+            ha="left", va="bottom", zorder=30,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 2},
+        )
 
     try:
         add_hydrography(ax, extent, render_spec.hydrography, palette)
@@ -834,8 +835,15 @@ def render_publication_style(
             adjust_text(
                 texts,
                 ax=ax,
-                expand=(1.2, 1.4),
-                lim=100,
+                x=jittered_coords[:, 0],
+                y=jittered_coords[:, 1],
+                avoid_self=False,
+                force_text=(0.8, 1.2),
+                force_static=(1.0, 1.4),
+                expand=(1.35, 1.65),
+                max_move=(20, 20),
+                ensure_inside_axes=True,
+                lim=300,
                 arrowprops=dict(
                     arrowstyle="-",
                     color=palette.text,
